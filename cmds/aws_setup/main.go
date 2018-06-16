@@ -29,14 +29,8 @@ func printAWSError(e error) {
 }
 
 func getVPC(awsSession *session.Session) *ec2.DescribeVpcsOutput {
-	input := &ec2.DescribeVpcsInput{
-		Filters: []*ec2.Filter{
-			&ec2.Filter{
-				Name:   aws.String("isDefault"),
-				Values: []*string{aws.String("true")},
-			},
-		},
-	}
+	var filter ec2.Filter
+	input := &ec2.DescribeVpcsInput{Filters: []*ec2.Filter{&filter}}
 
 	result, err := ec2.New(awsSession).DescribeVpcs(input)
 	if err != nil {
@@ -58,6 +52,27 @@ func getSubnets(awsSession *session.Session, vpc string) *ec2.DescribeSubnetsOut
 	}
 
 	result, err := ec2.New(awsSession).DescribeSubnets(input)
+	if err != nil {
+		printAWSError(err)
+		return nil
+	}
+
+	return result
+}
+
+func getInternetGateway(awsSession *session.Session, vpc string) *ec2.DescribeInternetGatewaysOutput {
+	input := &ec2.DescribeInternetGatewaysInput{
+		Filters: []*ec2.Filter{
+			{
+				Name: aws.String("attachment.vpc-id"),
+				Values: []*string{
+					aws.String(vpc),
+				},
+			},
+		},
+	}
+
+	result, err := ec2.New(awsSession).DescribeInternetGateways(input)
 	if err != nil {
 		printAWSError(err)
 		return nil
@@ -92,10 +107,24 @@ func createVPC(awsSession *session.Session) {
 	fmt.Println(result)
 }
 
-func deleteVPC(awsSession *session.Session, name string) {
+func deleteVPC(awsSession *session.Session, vpcName string) {
 	input := &ec2.DeleteVpcInput{
-		VpcId: aws.String(name),
+		VpcId: aws.String(vpcName),
 	}
+
+	internetGatewaysOutput := getInternetGateway(awsSession, vpcName)
+	for _, internetGateway := range internetGatewaysOutput.InternetGateways {
+		fmt.Println("Delete dependent internet gateway " + *internetGateway.InternetGatewayId + " for VPC " + vpcName)
+		detachInternetGateway(awsSession, vpcName, *internetGateway.InternetGatewayId)
+		deleteInternetGateway(awsSession, *internetGateway.InternetGatewayId)
+	}
+
+	subnetsOutput := getSubnets(awsSession, vpcName)
+	for _, subnet := range subnetsOutput.Subnets {
+		fmt.Println("Delete dependent subnet " + *subnet.SubnetId + " for VPC " + vpcName)
+		deleteSubnet(awsSession, *subnet.SubnetId)
+	}
+
 	result, err := ec2.New(awsSession).DeleteVpc(input)
 	if err != nil {
 		printAWSError(err)
@@ -103,7 +132,49 @@ func deleteVPC(awsSession *session.Session, name string) {
 	}
 
 	fmt.Println(result)
+}
 
+func detachInternetGateway(awsSession *session.Session, vpcName string, intenetGatewayName string) {
+	input := &ec2.DetachInternetGatewayInput{
+		VpcId:             aws.String(vpcName),
+		InternetGatewayId: aws.String(intenetGatewayName),
+	}
+
+	result, err := ec2.New(awsSession).DetachInternetGateway(input)
+	if err != nil {
+		printAWSError(err)
+		return
+	}
+
+	fmt.Println(result)
+}
+
+func deleteInternetGateway(awsSession *session.Session, intenetGatewayName string) {
+	input := &ec2.DeleteInternetGatewayInput{
+		InternetGatewayId: aws.String(intenetGatewayName),
+	}
+
+	result, err := ec2.New(awsSession).DeleteInternetGateway(input)
+	if err != nil {
+		printAWSError(err)
+		return
+	}
+
+	fmt.Println(result)
+}
+
+func deleteSubnet(awsSession *session.Session, subnetName string) {
+	input := &ec2.DeleteSubnetInput{
+		SubnetId: aws.String(subnetName),
+	}
+
+	result, err := ec2.New(awsSession).DeleteSubnet(input)
+	if err != nil {
+		printAWSError(err)
+		return
+	}
+
+	fmt.Println(result)
 }
 
 func listVPC(awsSession *session.Session) {
@@ -112,6 +183,7 @@ func listVPC(awsSession *session.Session) {
 
 	for _, vpc := range vpcs.Vpcs {
 		listSubnets(awsSession, *vpc.VpcId)
+		listIntenetGateway(awsSession, *vpc.VpcId)
 	}
 
 }
@@ -119,6 +191,11 @@ func listVPC(awsSession *session.Session) {
 func listSubnets(awsSession *session.Session, vpc string) {
 	subnets := getSubnets(awsSession, vpc)
 	fmt.Println(subnets)
+}
+
+func listIntenetGateway(awsSession *session.Session, vpc string) {
+	internetGateway := getInternetGateway(awsSession, vpc)
+	fmt.Println(internetGateway)
 }
 
 func main() {
