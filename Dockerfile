@@ -8,4 +8,4 @@ RUN go install -v ./...
 
 EXPOSE 8080/tcp
 
-CMD ["app"]
+CMD ["go", "run", "cmds/simple_web_server/main.go"]
