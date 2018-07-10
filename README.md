@@ -1,5 +1,9 @@
 # go-simple-web-server
 
+# Install docker on aws linux
+./install_aws_linux.sh
+Logout and login
+
 # Deploy
 docker pull wayming/golang-simple-web-server
 
