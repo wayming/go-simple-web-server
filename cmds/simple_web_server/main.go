@@ -10,5 +10,6 @@ func main() {
 		fmt.Fprintf(w, "Hello, you've requested: %s\n", r.URL.Path)
 	})
 
+	fmt.Println("Listening on 8080")
 	http.ListenAndServe(":8080", nil)
 }
